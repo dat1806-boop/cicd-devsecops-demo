@@ -90,7 +90,7 @@ jobs:
           tags: ${{ env.IMAGE }}:scan
 
       - name: Trivy scan (fail neu co HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:scan
           severity: HIGH,CRITICAL
