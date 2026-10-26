@@ -12,4 +12,4 @@ def test_index():
     client = app.test_client()
     res = client.get("/")
     assert res.status_code == 200
-    assert res.get_json()["message"] == "Hello WRONG"
+    assert res.get_json()["message"] == "Hello CI/CD"
