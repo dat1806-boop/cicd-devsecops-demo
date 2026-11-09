@@ -1,0 +1,3 @@
+{% extends 'base.html' %}
+{% block title %}Phòng CI/CD không khả dụng{% endblock %}
+{% block content %}<section class="empty-page"><div class="eyebrow">CONTROL PLANE DISABLED</div><h1>Phòng CI/CD chỉ chạy ở môi trường LOCAL.</h1><p>Ứng dụng đang chạy trong môi trường {{ version_info.environment|upper }}. Các thao tác quản trị build/deploy được tắt trong container ứng dụng.</p><a class="button button-primary" href="{{ url_for('index') }}">Quay về ứng dụng</a></section>{% endblock %}

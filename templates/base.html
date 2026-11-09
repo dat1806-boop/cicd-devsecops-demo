@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <title>{% block title %}WorkBoard · CI/CD Lab{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <div class="nav-wrap">
+      <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark">W</span><span>WorkBoard <small>CI/CD LAB</small></span></a>
+      <nav>
+        <a href="{{ url_for('index') }}" class="{% if request.path == '/' %}active{% endif %}">Ứng dụng</a>
+        {% if version_info.environment == 'local' %}
+        <a href="{{ url_for('lab') }}" class="{% if request.path == '/lab' %}active{% endif %}">Phòng CI/CD</a>
+        {% endif %}
+      </nav>
+      <div class="env-pill env-{{ version_info.environment }}"><i></i>{{ version_info.environment|upper }}</div>
+    </div>
+  </header>
+  <main class="page-shell">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <div>WORKBOARD <span>·</span> Ứng dụng mẫu cho CI/CD với GitHub Actions và Docker</div>
+    <div class="footer-meta">Version {{ version_info.version }} <span>·</span> Commit {{ version_info.commit[:12] }}</div>
+  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

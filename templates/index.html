@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}WorkBoard · Quản lý công việc{% endblock %}
+{% block content %}
+<section class="hero hero-app">
+  <div class="hero-copy">
+    <div class="eyebrow"><span class="pulse-dot"></span> ỨNG DỤNG MẪU ĐANG HOẠT ĐỘNG</div>
+    <h1>Quản lý công việc<br><em>đơn giản, trực quan.</em></h1>
+    <p>WorkBoard là ứng dụng mẫu được dùng để minh họa quy trình CI/CD. Bạn có thể tạo công việc, cập nhật trạng thái và theo dõi ứng dụng chạy trong từng môi trường.</p>
+    <a class="button button-primary" href="#workspace">Bắt đầu thao tác <span>↓</span></a>
+    {% if version_info.environment == 'local' %}<a class="button button-ghost" href="{{ url_for('lab') }}">Mở phòng CI/CD ↗</a>{% endif %}
+  </div>
+  <div class="hero-visual">
+    <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+    <div class="hero-window">
+      <div class="window-top"><span></span><span></span><span></span><b>workboard.app</b></div>
+      <div class="window-body">
+        <div class="mini-label">PROJECT OVERVIEW</div>
+        <div class="mini-title">Website CI/CD Lab</div>
+        <div class="mini-progress"><span></span></div>
+        <div class="mini-stats"><div><strong>08</strong><small>Tasks</small></div><div><strong>75%</strong><small>Progress</small></div><div><strong>03</strong><small>Environments</small></div></div>
+        <div class="mini-task"><i class="check-mini">✓</i><span>Build application</span><b>Done</b></div>
+        <div class="mini-task"><i></i><span>Run automated tests</span><b>In progress</b></div>
+        <div class="mini-task"><i></i><span>Deploy container</span><b>Next</b></div>
+      </div>
+    </div>
+    <div class="floating-chip chip-top"><span class="green-dot"></span> Application healthy</div>
+    <div class="floating-chip chip-bottom"><b>Docker</b><span>·</span> Ready to package</div>
+  </div>
+</section>
+
+{% if version_info.environment == 'local' %}
+<section class="panel release-launcher" id="new-release">
+  <div class="release-launch-head">
+    <div><div class="eyebrow">END-TO-END RELEASE DEMO</div><h2>Tạo phiên bản mới và triển khai</h2>
+      <p>Chạy kiểm thử thật, build Docker image có version riêng, tự triển khai DEV và STAGING. Production cần bạn phê duyệt.</p></div>
+    <span class="release-mark">CI → CD</span>
+  </div>
+  <form id="release-form" class="release-form">
+    <div><label for="release-version">Phiên bản</label><input id="release-version" name="version" value="v1.0.1" pattern="v?\d+\.\d+\.\d+" required></div>
+    <div class="release-description"><label for="release-description">Nội dung thay đổi</label><input id="release-description" name="description" maxlength="240" placeholder="Ví dụ: Cải tiến giao diện WorkBoard" required></div>
+    <button class="button button-primary" id="start-release" type="submit">▶ Tạo phiên bản mới và triển khai</button>
+  </form>
+  <div class="release-result" id="release-result" aria-live="polite"><span class="muted">Chưa có phiên phát hành mới. Hãy lưu thay đổi source code trước khi chạy.</span></div>
+  <div class="release-actions"><button class="button button-amber" id="release-approve" type="button" disabled>✓ Phê duyệt Production</button><button class="button button-primary" id="release-production" type="button" disabled>⇧ Triển khai Production</button><a id="release-prod-link" class="env-link" href="http://127.0.0.1:5103" target="_blank" rel="noopener" hidden>Mở Production ↗</a></div>
+  <p class="release-footnote">Lưu ý: nút này đóng gói source code hiện có trên máy. Nó không tự sửa mã nguồn và không thay thế workflow GitHub Actions.</p>
+</section>
+{% endif %}
+
+<section class="section-heading" id="workspace">
+  <div><div class="eyebrow">WORKSPACE / QUẢN LÝ CÔNG VIỆC</div><h2>Bảng công việc của bạn</h2><p>Thử tạo, hoàn thành, chỉnh sửa hoặc xóa một công việc ngay trên website.</p></div>
+  <div class="live-label"><span class="green-dot"></span> Dữ liệu đang lưu trong SQLite</div>
+</section>
+
+<section class="workspace-grid">
+  <div class="panel task-panel">
+    <div class="panel-head"><div><h3>Danh sách công việc</h3><p id="task-caption">Đang tải dữ liệu…</p></div><button class="icon-button" id="refresh-tasks" title="Tải lại">↻</button></div>
+    <div class="task-stats">
+      <div><span id="total-count">0</span><small>Tổng công việc</small></div>
+      <div><span id="pending-count">0</span><small>Đang thực hiện</small></div>
+      <div><span id="done-count">0</span><small>Hoàn thành</small></div>
+    </div>
+    <div id="task-list" class="task-list"><div class="empty-state">Đang tải công việc…</div></div>
+  </div>
+  <aside class="panel create-panel">
+    <div class="panel-head"><div><h3>Tạo công việc mới</h3><p>Thử thao tác CRUD trên ứng dụng.</p></div><span class="plus-mark">＋</span></div>
+    <form id="task-form">
+      <label for="task-title">Tên công việc <b>*</b></label>
+      <input id="task-title" name="title" maxlength="100" placeholder="Ví dụ: Hoàn thiện giao diện" required>
+      <label for="task-description">Mô tả</label>
+      <textarea id="task-description" name="description" maxlength="500" rows="4" placeholder="Mô tả ngắn về công việc…"></textarea>
+      <label for="task-priority">Mức ưu tiên</label>
+      <select id="task-priority" name="priority"><option value="normal">Bình thường</option><option value="high">Cao</option><option value="low">Thấp</option></select>
+      <button class="button button-primary button-full" type="submit">＋ Tạo công việc</button>
+    </form>
+    <div class="hint-box"><b>Gợi ý demo</b><p>Tạo một công việc mới, đánh dấu hoàn thành rồi tải lại trang. Dữ liệu vẫn được lưu trong SQLite.</p></div>
+  </aside>
+</section>
+
+<section class="concept-strip">
+  <div><span class="concept-icon">01</span><div><b>Thao tác ứng dụng</b><small>Tạo và cập nhật dữ liệu</small></div></div>
+  <div><span class="concept-icon">02</span><div><b>Kiểm thử tự động</b><small>pytest · flake8</small></div></div>
+  <div><span class="concept-icon">03</span><div><b>Đóng gói Docker</b><small>Build một image</small></div></div>
+  <div><span class="concept-icon">04</span><div><b>Triển khai đa môi trường</b><small>DEV · STAGING · PROD</small></div></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/app.js') }}"></script>{% endblock %}
