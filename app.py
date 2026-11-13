@@ -175,15 +175,13 @@ def run_command(command: list[str], timeout: int = 240) -> dict[str, object]:
             "success": completed.returncode == 0,
             "output": tail_output(output or "Lệnh hoàn tất, không có log."),
         }
-    except FileNotFoundError as exc:
+    except FileNotFoundError:
+        current_app.logger.exception("Không tìm thấy công cụ khi chạy tác vụ CI/CD.")
         return {
             "command": " ".join(command),
             "exit_code": 127,
             "success": False,
-            "output": (
-                f"Không tìm thấy công cụ: {exc.filename}. "
-                "Hãy cài công cụ và thử lại."
-            ),
+            "output": "Không tìm thấy công cụ cần thiết. Hãy kiểm tra cài đặt rồi thử lại.",
         }
     except subprocess.TimeoutExpired:
         return {
@@ -516,8 +514,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                         "Health endpoint trả về trạng thái không hợp lệ: "
                         f"{payload}"
                     )
-            except (OSError, ValueError, HTTPError) as exc:
-                health_error = str(exc)
+            except (OSError, ValueError, HTTPError):
+                current_app.logger.exception("Health check của container thất bại.")
+                health_error = "Không thể kiểm tra trạng thái container."
             time.sleep(1)
         if not healthy:
             logs = run_command([docker, "logs", container_name], timeout=20)
@@ -559,12 +558,22 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         payload = request.get_json(silent=True) or {}
         version = str(payload.get("version", "")).strip()
         description = str(payload.get("description", "")).strip()
-        if not re.fullmatch(r"v?\d+\.\d+\.\d+", version):
-            return jsonify(error="Phiên bản phải theo dạng v1.2.3 hoặc 1.2.3."), 400
+        # Bound input length and each numeric component to avoid regex backtracking
+        # and prevent user input from becoming part of an operating-system command.
+        valid_version = re.fullmatch(
+            r"v?[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}", version
+        )
+        if len(version) > 13 or not valid_version:
+            return jsonify(
+                error="Phiên bản phải theo dạng v1.2.3 hoặc 1.2.3 "
+                "(mỗi nhóm tối đa 3 chữ số)."
+            ), 400
         if not description or len(description) > 240:
             return jsonify(error="Hãy nhập mô tả thay đổi (tối đa 240 ký tự)."), 400
         version = version if version.startswith("v") else f"v{version}"
-        image_tag = f"cicd-lab:{version}"
+        # Use a fixed image tag for Docker commands. The user-supplied version
+        # remains release metadata and never reaches subprocess arguments.
+        image_tag = IMAGE_NAME
         with STATE_LOCK:
             if (DEMO_STATE.get("release") or {}).get("status") == "running":
                 return jsonify(error="Đang có phiên phát hành chạy."), 409
@@ -744,8 +753,11 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             data = github_request("actions/runs?per_page=8", token=token)
             runs = data.get("workflow_runs", [])
             return jsonify(runs=runs, source="GitHub Actions API")
-        except (HTTPError, URLError, TimeoutError, ValueError) as exc:
-            return jsonify(error=f"Không tải được lịch sử GitHub Actions: {exc}"), 502
+        except (HTTPError, URLError, TimeoutError, ValueError):
+            current_app.logger.exception("Không tải được lịch sử GitHub Actions.")
+            return jsonify(
+                error="Không tải được lịch sử GitHub Actions. Vui lòng thử lại sau."
+            ), 502
 
     @app.post("/api/github/dispatch")
     def github_dispatch():
@@ -812,10 +824,16 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     repository=repo,
                 )
         except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1200]
-            return jsonify(error=f"GitHub từ chối yêu cầu ({exc.code}): {detail}"), exc.code
-        except URLError as exc:
-            return jsonify(error=f"Không kết nối được GitHub: {exc.reason}"), 502
+            current_app.logger.exception("GitHub từ chối yêu cầu dispatch workflow.")
+            return jsonify(
+                error=(
+                    "GitHub từ chối yêu cầu chạy workflow. "
+                    "Hãy kiểm tra token và quyền Actions."
+                )
+            ), exc.code
+        except URLError:
+            current_app.logger.exception("Không kết nối được GitHub khi dispatch workflow.")
+            return jsonify(error="Không kết nối được GitHub. Vui lòng thử lại sau."), 502
 
     @app.get("/api/lab/scenario/<name>")
     def scenario(name: str):
