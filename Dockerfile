@@ -1,5 +1,12 @@
 FROM python:3.12-slim
 
+# Apply Debian 13 (trixie) security fixes for zlib1g before switching to appuser.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge \
+        "1:1.3.dfsg+really1.3.1-1+deb13u1" \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_ENV=dev \
