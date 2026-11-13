@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # Apply Debian 13 (trixie) security fixes for zlib1g before switching to appuser.
 RUN apt-get update \
