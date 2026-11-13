@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [develop, main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,7 +25,7 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - run: flake8 app.py test_app.py --max-line-length=100
-      - run: pytest
+      - run: pytest -q
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -64,61 +65,86 @@ jobs:
       - run: pip install pip-audit
       - run: pip-audit -r requirements.txt
 
-  # ---------- Build, scan, sign ----------
+  # ---------- Build, scan, sign: build once, scan and push the same image ----------
   build:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     needs: [test, secret-scan, sast, sca]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build de scan (chua push)
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          load: true
-          tags: ${{ env.IMAGE }}:scan
+      - name: Build Docker image (chi build mot lan)
+        run: docker build --pull --tag "$IMAGE:$GITHUB_SHA" .
 
-      - name: Trivy scan (fail neu co HIGH/CRITICAL)
+      - name: Trivy scan (scan dung image se push)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.IMAGE }}:scan
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
 
-      - name: Push image
+      - name: Push image va lay digest
         id: push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          push: true
-          tags: ${{ env.IMAGE }}:${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE:$GITHUB_SHA"
+          REPO_DIGEST="$(docker image inspect "$IMAGE:$GITHUB_SHA" --format '{{range .RepoDigests}}{{println .}}{{end}}' | head -n 1)"
+          DIGEST="${REPO_DIGEST##*@}"
+          if [[ ! "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Khong lay duoc digest hop le tu image da push: $REPO_DIGEST" >&2
+            exit 1
+          fi
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
-      - name: Ky image
-        run: cosign sign --yes ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+      - name: Ky image theo digest
+        run: cosign sign --yes "$IMAGE@${{ steps.push.outputs.digest }}"
 
-      - name: Tao SBOM
+      - name: Tao SBOM tu image theo digest
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
-          image: ${{ env.IMAGE }}:${{ github.sha }}
+          image: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
           artifact-name: sbom.spdx.json
+
+  # Verify signature before any environment receives the image.
+  verify:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    env:
+      COSIGN_CERT_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/pipeline.yml@${{ github.ref }}
+    steps:
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+      - name: Verify Cosign signature
+        run: |
+          cosign verify \
+            --certificate-identity "$COSIGN_CERT_IDENTITY" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$IMAGE@${{ needs.build.outputs.digest }}"
 
   # ---------- CD ----------
   deploy-dev:
     if: github.ref == 'refs/heads/develop'
-    needs: build
+    needs: [build, verify]
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -129,16 +155,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Deploy dev (port 3001)
+      - name: Deploy DEV va smoke test
+        env:
+          IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
         run: |
-          docker run -d --name app-dev -p 3001:5000 -e APP_ENV=dev $IMAGE:${{ github.sha }}
-          sleep 5
-          curl -f http://localhost:3001/health
-          curl -s http://localhost:3001/
+          set -euo pipefail
+          docker run -d --name app-dev -p 3001:5000 -e APP_ENV=dev "$IMAGE@$IMAGE_DIGEST"
+          for attempt in {1..20}; do
+            if curl -fsS http://localhost:3001/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs app-dev || true
+          docker rm -f app-dev || true
+          exit 1
 
   deploy-staging:
     if: github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, verify]
     runs-on: ubuntu-latest
     environment: staging
     permissions:
@@ -149,15 +182,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Deploy staging (port 3002) + smoke test
+      - name: Deploy STAGING va smoke test
+        env:
+          IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
         run: |
-          docker run -d --name app-staging -p 3002:5000 -e APP_ENV=staging $IMAGE:${{ github.sha }}
-          sleep 5
-          curl -f http://localhost:3002/health
-          curl -s http://localhost:3002/
+          set -euo pipefail
+          docker run -d --name app-staging -p 3002:5000 -e APP_ENV=staging "$IMAGE@$IMAGE_DIGEST"
+          for attempt in {1..20}; do
+            if curl -fsS http://localhost:3002/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs app-staging || true
+          docker rm -f app-staging || true
+          exit 1
 
   deploy-production:
-    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    needs: [build, verify, deploy-staging]
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -168,9 +209,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Deploy production (port 3003)
+      - name: Deploy PRODUCTION va smoke test
+        env:
+          IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
         run: |
-          docker run -d --name app-prod -p 3003:5000 -e APP_ENV=production $IMAGE:${{ github.sha }}
-          sleep 5
-          curl -f http://localhost:3003/health
-          curl -s http://localhost:3003/
+          set -euo pipefail
+          docker run -d --name app-prod -p 3003:5000 -e APP_ENV=production "$IMAGE@$IMAGE_DIGEST"
+          for attempt in {1..20}; do
+            if curl -fsS http://localhost:3003/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs app-prod || true
+          docker rm -f app-prod || true
+          exit 1

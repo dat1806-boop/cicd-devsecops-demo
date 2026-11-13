@@ -153,3 +153,8 @@ __pycache__/
 .venv/
 .pytest_cache/
 .env
+
+# Python / application data
+instance/
+*.sqlite
+*.db
