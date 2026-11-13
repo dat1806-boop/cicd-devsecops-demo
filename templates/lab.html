@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Phòng CI/CD · WorkBoard{% endblock %}
+{% block content %}
+<section class="lab-header">
+  <div><div class="eyebrow"><span class="pulse-dot"></span> LOCAL RELEASE LAB</div><h1>Đưa thay đổi vào<br><em>quy trình phát hành.</em></h1><p>Thực hiện từng bước ngay trên website: kiểm thử mã nguồn, build Docker image, chạy container qua DEV → STAGING → PRODUCTION.</p></div>
+  <div class="lab-status-card"><span class="status-orb"></span><div><b>Phòng thực hành cục bộ</b><small>Thao tác chạy trên máy tính này</small></div><span class="env-pill env-local"><i></i> LOCAL</span></div>
+</section>
+
+<div class="notice notice-info"><b>Phân biệt dữ liệu thật và minh họa:</b> pytest/flake8 và Docker build/deploy bên dưới sẽ chạy lệnh thật trên máy của bạn. Kịch bản Secret/SCA là tình huống minh họa theo báo cáo. Nút GitHub Actions (nếu cấu hình token) sẽ kích hoạt workflow thật trên GitHub.</div>
+
+<section class="release-layout">
+  <div class="release-main">
+    <div class="section-heading compact"><div><div class="eyebrow">RELEASE PIPELINE</div><h2>Các bước phát hành</h2><p>Đi theo thứ tự để thấy điều kiện chặn giữa các giai đoạn.</p></div><button id="reset-lab" class="button button-ghost">Đặt lại trạng thái</button></div>
+    <div class="pipeline-track">
+      <article class="pipeline-step" data-step="tests">
+        <div class="step-index">01</div><div class="step-content"><div class="step-top"><div><span class="step-kicker">CONTINUOUS INTEGRATION</span><h3>Kiểm thử tự động</h3></div><span class="step-state state-not_run">CHƯA CHẠY</span></div><p>Chạy Flake8 để kiểm tra chất lượng mã và Pytest để xác nhận các chức năng của WorkBoard.</p><div class="step-output" id="tests-output"><span class="muted">Chưa có log. Nhấn nút để chạy kiểm thử thật.</span></div><button id="run-tests" class="button button-primary">▶ Chạy kiểm thử tự động</button></div>
+      </article>
+      <article class="pipeline-step" data-step="build">
+        <div class="step-index">02</div><div class="step-content"><div class="step-top"><div><span class="step-kicker">CONTAINERIZATION</span><h3>Đóng gói Docker</h3></div><span class="step-state state-not_run">CHƯA BUILD</span></div><p>Sau khi test đạt, Docker đọc Dockerfile và đóng gói ứng dụng cùng thư viện thành image <code>cicd-lab:demo</code>.</p><div class="step-output" id="build-output"><span class="muted">Chưa có Docker image.</span></div><button id="build-image" class="button button-primary" disabled>▣ Build Docker image</button></div>
+      </article>
+      <article class="pipeline-step" data-step="dev">
+        <div class="step-index">03</div><div class="step-content"><div class="step-top"><div><span class="step-kicker">DEPLOYMENT / DEVELOPMENT</span><h3>Triển khai DEV</h3></div><span class="step-state state-not_run">CHƯA DEPLOY</span></div><p>Chạy container từ image vừa build, gán <code>APP_ENV=dev</code>, ánh xạ cổng 5101 và kiểm tra <code>/health</code>.</p><div class="step-output" id="dev-output"><span class="muted">Chưa có container DEV.</span></div><button id="deploy-dev" class="button button-primary" disabled>⇧ Triển khai DEV</button><a class="env-link" id="dev-link" hidden target="_blank" rel="noopener">Mở website DEV ↗</a></div>
+      </article>
+      <article class="pipeline-step" data-step="staging">
+        <div class="step-index">04</div><div class="step-content"><div class="step-top"><div><span class="step-kicker">DEPLOYMENT / STAGING</span><h3>Triển khai STAGING</h3></div><span class="step-state state-not_run">CHƯA DEPLOY</span></div><p>Dùng chính image đó chạy container ở cổng 5102, gán <code>APP_ENV=staging</code> và chạy health check.</p><div class="step-output" id="staging-output"><span class="muted">Cần DEV thành công trước.</span></div><button id="deploy-staging" class="button button-primary" disabled>⇧ Triển khai STAGING</button><a class="env-link" id="staging-link" hidden target="_blank" rel="noopener">Mở website STAGING ↗</a></div>
+      </article>
+      <article class="pipeline-step" data-step="production">
+        <div class="step-index">05</div><div class="step-content"><div class="step-top"><div><span class="step-kicker">CONTROLLED RELEASE</span><h3>Phê duyệt và triển khai PRODUCTION</h3></div><span class="step-state state-not_run">CHỜ PHÊ DUYỆT</span></div><p>Production chỉ mở sau khi STAGING đạt và người trình diễn chủ động phê duyệt. Container chạy ở cổng 5103.</p><div class="approval-row"><button id="approve-production" class="button button-amber" disabled>✓ Phê duyệt phát hành</button><button id="deploy-production" class="button button-primary" disabled>⇧ Triển khai PRODUCTION</button></div><div class="step-output" id="production-output"><span class="muted">Chưa được phê duyệt.</span></div><a class="env-link" id="production-link" hidden target="_blank" rel="noopener">Mở website PRODUCTION ↗</a></div>
+      </article>
+    </div>
+  </div>
+  <aside class="release-aside">
+    <div class="panel image-panel"><div class="eyebrow">BUILD ARTIFACT</div><h3>Docker image</h3><div class="image-cube">▧</div><b id="image-tag">Chưa tạo image</b><small id="image-id">Sau khi build thành công, Image ID sẽ xuất hiện ở đây.</small><div class="same-image-note">Một image · ba môi trường</div></div>
+    <div class="panel env-panel"><div class="panel-head"><div><div class="eyebrow">RUNTIME STATUS</div><h3>Môi trường</h3></div></div><div class="env-row"><span class="env-dot dev-dot"></span><div><b>DEV</b><small>127.0.0.1:5101</small></div><span id="env-dev" class="mini-state">Chưa chạy</span></div><div class="env-row"><span class="env-dot staging-dot"></span><div><b>STAGING</b><small>127.0.0.1:5102</small></div><span id="env-staging" class="mini-state">Chưa chạy</span></div><div class="env-row"><span class="env-dot prod-dot"></span><div><b>PRODUCTION</b><small>127.0.0.1:5103</small></div><span id="env-production" class="mini-state">Chưa chạy</span></div></div>
+    <div class="panel explain-panel"><div class="eyebrow">GIẢI THÍCH NHANH</div><h3>Điều gì đang diễn ra?</h3><ul><li><b>Test:</b> mã nguồn phải đạt trước khi đóng gói.</li><li><b>Build:</b> tạo image từ Dockerfile.</li><li><b>Deploy:</b> cùng image chạy với cấu hình môi trường khác nhau.</li><li><b>Health check:</b> xác nhận container phản hồi.</li><li><b>Approval:</b> tạo cổng kiểm soát trước production.</li></ul></div>
+  </aside>
+</section>
+
+<section class="panel scenario-panel"><div class="section-heading compact"><div><div class="eyebrow">FAIL-FAST / SECURITY GATES</div><h2>Thử các tình huống bị chặn</h2><p>Các thẻ dưới đây tái hiện kết quả đã ghi nhận trong báo cáo, không chạy scanner trên mã nguồn hiện tại.</p></div></div><div class="scenario-grid"><button class="scenario-card" data-scenario="test"><span class="scenario-icon red">!</span><b>Unit Test sai</b><small>pytest · 1 failed, 1 passed</small><span>Xem tình huống ↗</span></button><button class="scenario-card" data-scenario="secret"><span class="scenario-icon orange">⌕</span><b>Lộ khóa bí mật</b><small>Gitleaks · leaks found: 1</small><span>Xem tình huống ↗</span></button><button class="scenario-card" data-scenario="sca"><span class="scenario-icon violet">⌁</span><b>Thư viện có lỗ hổng</b><small>pip-audit · Flask 3.1.2</small><span>Xem tình huống ↗</span></button></div><div id="scenario-result" class="scenario-result" hidden></div></section>
+
+<section class="panel github-panel"><div class="panel-head"><div><div class="eyebrow">REAL GITHUB WORKFLOW</div><h2>Kích hoạt GitHub Actions thật</h2><p>Gửi yêu cầu workflow_dispatch lên repository. Token chỉ được đọc ở backend, không gửi xuống trình duyệt.</p></div><span class="github-mark">GH</span></div><div class="github-controls"><label for="github-branch">Nhánh chạy</label><select id="github-branch"><option value="main">main → STAGING / PRODUCTION</option><option value="develop">develop → DEV</option></select><button id="dispatch-github" class="button button-primary">▶ Chạy workflow trên GitHub</button></div><div class="step-output" id="github-output">{% if github_ready %}Đã phát hiện GITHUB_TOKEN trong cấu hình máy chủ.{% else %}Chưa cấu hình GITHUB_TOKEN. Xem README để bật nút này.{% endif %}</div><button id="refresh-github" class="button button-ghost">Tải lịch sử workflow thật</button><div id="github-runs" class="github-runs"></div></section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/lab.js') }}"></script>{% endblock %}
