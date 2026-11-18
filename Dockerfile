@@ -7,6 +7,9 @@ RUN apt-get update \
         "1:1.3.dfsg+really1.3.1-1+deb13u1" \
     && rm -rf /var/lib/apt/lists/*
 
+ARG WORKBOARD_FEATURE_SET=basic
+ENV WORKBOARD_FEATURE_SET=${WORKBOARD_FEATURE_SET}
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_ENV=dev \

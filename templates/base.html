@@ -18,7 +18,7 @@
         <a href="{{ url_for('lab') }}" class="{% if request.path == '/lab' %}active{% endif %}">Phòng CI/CD</a>
         {% endif %}
       </nav>
-      <div class="env-pill env-{{ version_info.environment }}"><i></i>{{ version_info.environment|upper }}</div>
+      <div class="env-pill env-{{ version_info.environment }}"><i></i>{{ version_info.environment|upper }} <span class="env-version">{{ version_info.version }}</span></div>
     </div>
   </header>
   <main class="page-shell">

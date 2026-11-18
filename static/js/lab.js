@@ -21,6 +21,11 @@ function setState(step, status, label, output) {
   const badge = article.querySelector('.step-state');
   badge.className = `step-state state-${status}`;
   badge.textContent = label;
+  article.classList.toggle('has-error', status === 'failure');
+  if (status === 'failure') {
+    const log = article.querySelector('.log-details');
+    if (log) log.open = true;
+  }
   if (output !== undefined) {
     const node = document.getElementById(`${step}-output`);
     if (node) node.textContent = output;
@@ -29,7 +34,104 @@ function setState(step, status, label, output) {
 function outputForCommand(item) {
   return `$ ${item.command}\nExit code: ${item.exit_code}\n${item.output || ''}`;
 }
+// This board makes the actual results visible to the presenter.
+function updateTeachingSummary(state) {
+  const commands = state.tests?.commands || [];
+  const pytest = commands.map(item => item.output || '').join('\n');
+  const passed = pytest.match(/(\d+) passed\b/);
+  const testsNode = document.getElementById('proof-tests');
+  testsNode.textContent = state.tests?.status === 'success'
+    ? `${passed ? passed[1] + ' bài test' : 'Kiểm thử'} đạt`
+    : state.tests?.status === 'failure' ? 'Thất bại · Chặn build' : 'Chưa chạy';
+  document.getElementById('proof-tests-detail').textContent = state.tests?.status === 'success'
+    ? 'Flake8 đạt; Pytest hoàn tất bằng lệnh thật'
+    : 'Flake8 + Pytest, chạy trong source WorkBoard';
+  const img = state.image;
+  document.getElementById('proof-image').textContent = img ? img.tag : 'Chưa build';
+  document.getElementById('proof-image-detail').textContent = img
+    ? `Image ID: ${img.id || 'không có'}` : 'Chờ Test đạt trước khi tạo image';
+  const envs = state.environments || {};
+  const intro = document.getElementById('proof-explanation');
+  if (envs.production?.version === 'v1.1.0' && envs.production.status === 'success') {
+    intro.textContent = 'Thưa thầy, Production vừa được cập nhật lên v1.1.0 sau phê duyệt. Bảng phân tích công việc mới đã có ở website Production.';
+  } else if (envs.staging?.version === 'v1.1.0' && envs.production?.version === 'v1.0.0') {
+    intro.textContent = 'Thưa thầy, DEV và STAGING đang dùng v1.1.0 nhưng Production vẫn là v1.0.0. Phiên bản cũ không bị thay đổi trước khi được phê duyệt.';
+  } else if (envs.production?.version === 'v1.0.0') {
+    intro.textContent = 'Đây là website Production v1.0.0 đang phục vụ từ container Docker. Khi phát hành bản nâng cấp, Production vẫn giữ bản cũ đến lúc phê duyệt.';
+  } else if (state.tests?.status === 'failure') {
+    intro.textContent = 'Kiểm thử phát hiện lỗi, nên Docker Build bị chặn. Đây là cơ chế fail-fast của quy trình CI.';
+  } else if (envs.staging?.status === 'success') {
+    intro.textContent = 'DEV và STAGING đã triển khai thành công. Em sẽ xác nhận health check rồi phê duyệt bản cập nhật Production.';
+  } else if (envs.dev?.status === 'success') {
+    intro.textContent = 'Container DEV đang chạy WorkBoard ở cổng 5101. Em sẽ kiểm tra /health và đưa cùng image lên STAGING.';
+  } else if (img) {
+    intro.textContent = 'Docker đã đóng gói WorkBoard thành image thật. Image ID ở đây là dấu vết để kiểm tra các môi trường đang chạy cùng sản phẩm đóng gói.';
+  } else if (state.tests?.status === 'success') {
+    intro.textContent = 'Bộ kiểm thử WorkBoard đã đạt, nên bước Build Docker được mở khóa. Nếu kiểm thử sai, quy trình sẽ dừng tại đây.';
+  } else {
+    intro.textContent = 'Thưa thầy, em sử dụng WorkBoard làm ứng dụng mẫu. Em sẽ lần lượt kiểm thử mã nguồn, build image và triển khai vào các container.';
+  }
+}
+function setProofMessage(message) {
+  document.getElementById('proof-feedback').textContent = message;
+}
+async function verifyDockerEvidence() {
+  const button = document.getElementById('verify-docker');
+  if (button.disabled) return;
+  button.disabled = true;
+  const previous = button.textContent;
+  button.textContent = 'Đang kiểm tra Docker Engine…';
+  try {
+    const data = await api('/api/lab/evidence');
+    const envBox = document.getElementById('proof-environments');
+    envBox.replaceChildren();
+    let runningCount = 0;
+    for (const [name, port] of [['dev', 5101], ['staging', 5102], ['production', 5103]]) {
+      const item = data.environments?.[name] || {};
+      const card = document.createElement('div');
+      const title = document.createElement('b');
+      title.textContent = `${name.toUpperCase()} · :${port}`;
+      const state = document.createElement('p');
+      if (item.running) runningCount++;
+      state.className = item.healthy ? 'evidence-success' : 'evidence-error';
+      state.textContent = item.healthy ? '✓ Container đang chạy · HTTP 200 /health'
+        : item.running ? `⚠ Container đang chạy nhưng ${item.health_result}`
+        : 'Chưa có container đang chạy';
+      const info = document.createElement('p');
+      info.textContent = `Version: ${item.version || '—'}\nTính năng: ${item.features || '—'}\nImage ID: ${item.image_id ? item.image_id.slice(0, 23) + '…' : '—'}\nCông việc: ${item.tasks ?? '—'}`;
+      card.append(title, state, info);
+      if (item.running && item.healthy) {
+        const link = document.createElement('a');
+        link.href = item.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.className = 'evidence-link';
+        link.textContent = `Mở WorkBoard ${name.toUpperCase()} ↗`;
+        card.append(link);
+      }
+      envBox.append(card);
+    }
+    document.getElementById('proof-count').textContent = `${runningCount} / 3 đang chạy`;
+    const imageLines = Object.entries(data.images || {}).map(([tag, item]) =>
+      `${item.exists ? '✓' : '–'} ${tag}\n   ${item.exists ? item.image_id : 'Chưa có image'}`);
+    document.getElementById('proof-images').textContent = imageLines.join('\n\n');
+    setProofMessage(`Đã đối chiếu bằng Docker CLI và các API thực tế. ${data.checked_at}. ${data.source}`);
+  } catch (error) {
+    setProofMessage(`Chưa kiểm tra được Docker thật: ${error.message}`);
+    document.getElementById('proof-count').textContent = 'Chưa xác minh';
+    document.getElementById('proof-images').textContent = 'Docker chưa sẵn sàng.';
+    document.querySelectorAll('#proof-environments > div').forEach(card => {
+      const message = card.querySelector('p');
+      if (message) message.textContent = 'Chưa xác minh. Kiểm tra Docker Desktop.';
+      card.querySelectorAll('p:not(:first-of-type), a').forEach(node => node.remove());
+    });
+  } finally {
+    button.disabled = false;
+    button.textContent = previous;
+  }
+}
 function applyState(state) {
+  updateTeachingSummary(state);
   const tests = state.tests || {};
   setState('tests', tests.status || 'not_run', tests.status === 'success' ? 'ĐẠT' : tests.status === 'failure' ? 'THẤT BẠI' : 'CHƯA CHẠY');
   if (tests.commands) document.getElementById('tests-output').textContent = tests.commands.map(outputForCommand).join('\n\n');
@@ -47,7 +149,7 @@ function applyState(state) {
     const status = env.status || 'not_deployed';
     const label = status === 'success' ? 'Đang chạy' : 'Chưa chạy';
     document.getElementById(`env-${name}`).textContent = label;
-    const output = env.url ? `Container: ${env.container}\nURL: ${env.url}\nImage ID: ${env.image_id}\nHealth check: HTTP 200 /health` : '<span class="muted">Chưa có container ở môi trường này.</span>';
+    const output = env.url ? `Phiên bản: ${env.version || 'n/a'}\nImage: ${env.image_tag || 'n/a'}\nContainer: ${env.container}\nURL: ${env.url}\nImage ID: ${env.image_id}\nHealth check: HTTP 200 /health` : 'Chưa có container ở môi trường này.';
     setState(name, status === 'success' ? 'success' : 'not_run', status === 'success' ? 'ĐÃ DEPLOY' : 'CHƯA DEPLOY', output);
     const link = document.getElementById(`${name}-link`);
     link.hidden = !env.url;
@@ -59,7 +161,7 @@ function applyState(state) {
   const stagingReady = envs.staging?.status === 'success';
   document.getElementById('approve-production').disabled = !stagingReady || state.production_approved;
   document.getElementById('deploy-production').disabled = !stagingReady || !state.production_approved;
-  if (state.production_approved) document.getElementById('production-output').textContent = 'Đã phê duyệt tại LOCAL. Có thể triển khai production mô phỏng.';
+  if (state.production_approved && envs.production?.status !== 'success') document.getElementById('production-output').textContent = 'Đã phê duyệt tại LOCAL. Có thể triển khai production mô phỏng.';
 }
 async function refreshState() {
   try { const state = await api('/api/lab/status'); applyState(state); }
@@ -73,10 +175,12 @@ async function runAction(button, endpoint, successMessage) {
     const result = await api(endpoint, {method: 'POST', body: '{}'});
     showToast(successMessage || result.message || 'Hoàn tất.');
     await refreshState();
+    await verifyDockerEvidence();
     return result;
   } catch (error) {
     showToast(error.message, true);
     await refreshState();
+    await verifyDockerEvidence();
     return null;
   } finally {
     button.textContent = oldText;
@@ -89,6 +193,7 @@ document.getElementById('run-tests').addEventListener('click', async event => {
   try {
     const result = await api('/api/lab/tests', {method: 'POST', body: '{}'});
     await refreshState();
+    await verifyDockerEvidence();
     showToast(result.success ? 'Kiểm thử đạt. Có thể chuyển sang Docker build.' : 'Kiểm thử thất bại. Build bị khóa.', !result.success);
   } catch (error) { showToast(error.message, true); await refreshState(); }
   finally { button.textContent = '▶ Chạy kiểm thử tự động'; await refreshState(); }
@@ -103,7 +208,7 @@ document.getElementById('approve-production').addEventListener('click', async ev
 });
 document.getElementById('deploy-production').addEventListener('click', event => runAction(event.currentTarget, '/api/lab/deploy/production', 'PRODUCTION đã triển khai và health check đạt.'));
 document.getElementById('reset-lab').addEventListener('click', async event => {
-  if (!window.confirm('Đặt lại trạng thái và dừng các container DEV/STAGING/PRODUCTION do demo tạo?')) return;
+  if (!window.confirm('Đặt lại trạng thái và dừng các container DEV/STAGING/PRODUCTION? Dữ liệu SQLite trong Docker volumes và ứng dụng LOCAL vẫn được giữ lại.')) return;
   await runAction(event.currentTarget, '/api/lab/reset', 'Đã đặt lại phòng CI/CD.');
 });
 
@@ -154,4 +259,5 @@ async function loadGithubRuns() {
   } catch (error) { box.textContent = error.message; }
 }
 document.getElementById('refresh-github').addEventListener('click', loadGithubRuns);
-refreshState();
+document.getElementById('verify-docker').addEventListener('click', verifyDockerEvidence);
+refreshState().then(verifyDockerEvidence);
