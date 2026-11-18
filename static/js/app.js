@@ -29,6 +29,16 @@ function renderTasks(tasks) {
   document.getElementById('done-count').textContent = done;
   document.getElementById('pending-count').textContent = tasks.length - done;
   document.getElementById('task-caption').textContent = `${tasks.length} công việc · dữ liệu được lưu trong SQLite`;
+  const insightProgress = document.getElementById('insight-progress');
+  if (insightProgress) {
+    insightProgress.textContent = `${tasks.length ? Math.round(done * 100 / tasks.length) : 0}%`;
+    ['high', 'normal', 'low'].forEach(priority => {
+      const count = tasks.filter(task => task.priority === priority).length;
+      document.getElementById(`priority-${priority}-count`).textContent = count;
+      document.getElementById(`priority-${priority}-bar`).style.width =
+        `${tasks.length ? count * 100 / tasks.length : 0}%`;
+    });
+  }
   if (!tasks.length) {
     taskList.append(el('div', 'empty-state', 'Chưa có công việc. Hãy tạo công việc đầu tiên ở khung bên phải.'));
     return;
@@ -80,9 +90,9 @@ document.getElementById('task-form').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
   const payload = {
-    title: form.title.value.trim(),
-    description: form.description.value.trim(),
-    priority: form.priority.value
+    title: form.elements.namedItem('title').value.trim(),
+    description: form.elements.namedItem('description').value.trim(),
+    priority: form.elements.namedItem('priority').value
   };
   try {
     await api('/api/tasks', {method: 'POST', body: JSON.stringify(payload)});
@@ -93,44 +103,130 @@ document.getElementById('refresh-tasks').addEventListener('click', loadTasks);
 loadTasks();
 
 
-// Versioned local release: real Flake8/Pytest, Docker build, DEV/STAGING deploy.
+// Versioned local release: two prebuilt feature configurations, real Docker and CI.
 const releaseForm = document.getElementById('release-form');
 if (releaseForm) {
   const releaseResult = document.getElementById('release-result');
+  const baselineButton = document.getElementById('prepare-baseline');
   const startButton = document.getElementById('start-release');
   const approveButton = document.getElementById('release-approve');
   const productionButton = document.getElementById('release-production');
+  const oldProdLink = document.getElementById('baseline-prod-link');
   const productionLink = document.getElementById('release-prod-link');
+  const names = ['dev', 'staging', 'production'];
   const releaseOutput = (lines, failed=false) => {
     releaseResult.textContent = lines.join('\n');
     releaseResult.classList.toggle('error-line', failed);
     releaseResult.classList.toggle('success-line', !failed);
   };
+  function applyReleaseState(state) {
+    const envs = state.environments || {};
+    names.forEach(name => {
+      const env = envs[name] || {};
+      const ready = env.status === 'success';
+      document.getElementById(`compare-${name}`).textContent =
+        ready ? `${env.version || '?'} · đang chạy` : 'Chưa triển khai';
+      document.getElementById(`compare-${name}-link`).hidden = !ready;
+    });
+    const oldVersion = envs.production?.version === 'v1.0.0';
+    oldProdLink.hidden = !oldVersion;
+    baselineButton.disabled = state.release?.status === 'running';
+    const status = state.release?.status;
+    const upgradeStatus = document.getElementById('edition-upgrade-status');
+    if (upgradeStatus) {
+      upgradeStatus.textContent = status === 'released' ? '(đã lên Production)' :
+        status === 'approved' ? '(đã duyệt, chưa lên Production)' :
+        status === 'awaiting_approval' ? '(đã lên DEV/STAGING)' :
+        status === 'running' ? '(đang kiểm thử và triển khai)' :
+        '(chưa phát hành)';
+    }
+    approveButton.disabled = status !== 'awaiting_approval';
+    productionButton.disabled = status !== 'approved';
+    productionLink.hidden = status !== 'released';
+  }
+  async function refreshReleaseState() {
+    try { applyReleaseState(await api('/api/lab/status')); }
+    catch (error) { showToast(error.message, true); }
+  }
+  baselineButton.addEventListener('click', async () => {
+    if (!window.confirm('Chuẩn bị bản cũ v1.0.0 trên PRODUCTION :5103? Container production demo hiện tại sẽ được thay thế.')) return;
+    baselineButton.disabled = true;
+    releaseOutput(['Đang build image cũ v1.0.0…', 'Sau đó khởi chạy Production tại cổng 5103.']);
+    try {
+      const data = await api('/api/lab/baseline', {method:'POST', body:'{}'});
+      releaseOutput([
+        'BẢN CŨ ĐÃ CHẠY: v1.0.0', `PRODUCTION: ${data.production.url}`,
+        `Image: ${data.baseline.image_tag}`, `Image ID: ${data.baseline.image_id}`,
+        'Mở Production để xem bản cũ. Sau đó mới phát hành v1.1.0.'
+      ]);
+      showToast('Bản cũ v1.0.0 đã hoạt động trên Production.');
+    } catch (error) {
+      releaseOutput([`Không chuẩn bị được bản cũ: ${error.message}`], true);
+      showToast(error.message, true);
+    } finally { baselineButton.disabled = false; await refreshReleaseState(); }
+  });
   releaseForm.addEventListener('submit', async event => {
     event.preventDefault();
-    const version = releaseForm.version.value.trim();
-    const description = releaseForm.description.value.trim();
-    startButton.disabled = true; approveButton.disabled = true; productionButton.disabled = true;
-    productionLink.hidden = true;
-    releaseOutput(['Đang chạy CI: Flake8 + Pytest…', 'Nếu kiểm thử đạt, Docker sẽ build image phiên bản mới và triển khai DEV → STAGING.']);
+    const version = releaseForm.elements.namedItem('version').value.trim();
+    const description = releaseForm.elements.namedItem('description').value.trim();
+    startButton.disabled = true;
+    approveButton.disabled = true;
+    productionButton.disabled = true;
+    releaseOutput([
+      'Đang chạy CI: Flake8 + Pytest…',
+      'Kế tiếp: build image v1.1.0 (bật bảng phân tích), deploy DEV và STAGING.',
+      'Production đang chạy v1.0.0 sẽ KHÔNG bị thay đổi trước phê duyệt.'
+    ]);
     try {
-      const result = await api('/api/lab/release/start', {method:'POST', body:JSON.stringify({version, description})});
-      const testLog = (result.tests || []).map(item => `${item.command}\nExit code: ${item.exit_code}\n${item.output}`).join('\n\n');
-      releaseOutput([`PHÁT HÀNH ${result.release.version}: ${result.release.description}`, 'CI: PASSED', testLog, `DOCKER BUILD: ${result.image.tag}`, `Image ID: ${result.image.id}`, `DEV: ${result.dev.url} — HEALTHY`, `STAGING: ${result.staging.url} — HEALTHY`, 'Đang chờ bạn phê duyệt Production.']);
-      approveButton.disabled = false;
+      const data = await api('/api/lab/release/start', {
+        method:'POST', body:JSON.stringify({version,description})
+      });
+      const log = (data.tests || []).map(item =>
+        `${item.command} | Exit code: ${item.exit_code} | ${item.output}`
+      ).join('\n');
+      releaseOutput([
+        `PHIÊN BẢN MỚI ${data.release.version}: ${data.release.description}`,
+        'CI: PASSED', log, `IMAGE MỚI: ${data.image.tag}`,
+        `Image ID: ${data.image.id}`, `DEV ${data.dev.version}: ${data.dev.url}`,
+        `STAGING ${data.staging.version}: ${data.staging.url}`,
+        'Mở DEV và STAGING: tính năng mới đã xuất hiện.',
+        'Mở PRODUCTION: vẫn là bản cũ trước khi phê duyệt.'
+      ]);
+      showToast('Bản v1.1.0 đã lên DEV/STAGING. Production vẫn giữ bản cũ.');
     } catch (error) {
-      releaseOutput([`PHÁT HÀNH THẤT BẠI: ${error.message}`, 'Kiểm tra Docker Desktop, Python environment và log phía trên nếu có.'], true);
+      releaseOutput([`Phát hành chưa thành công: ${error.message}`], true);
       showToast(error.message, true);
-    } finally { startButton.disabled = false; }
+    } finally { startButton.disabled = false; await refreshReleaseState(); }
   });
   approveButton.addEventListener('click', async () => {
+    if (!window.confirm('Đã kiểm tra tính năng mới ở STAGING? Đồng ý cho v1.1.0 lên Production?')) return;
     approveButton.disabled = true;
-    try { const result = await api('/api/lab/approve-production', {method:'POST', body:'{}'}); releaseOutput([result.message, 'Production đã được phê duyệt. Bạn có thể triển khai phiên bản này.']); productionButton.disabled = false; }
-    catch (error) { approveButton.disabled = false; showToast(error.message, true); releaseOutput([error.message], true); }
+    try {
+      const data = await api('/api/lab/approve-production', {
+        method:'POST', body:'{}'
+      });
+      releaseOutput([data.message, 'Production vẫn là bản cũ cho tới lúc nhấn Cập nhật Production.']);
+      showToast('Đã phê duyệt phát hành v1.1.0.');
+    } catch (error) { showToast(error.message, true); }
+    await refreshReleaseState();
   });
   productionButton.addEventListener('click', async () => {
     productionButton.disabled = true;
-    try { const result = await api('/api/lab/deploy/production', {method:'POST', body:'{}'}); releaseOutput([`PRODUCTION: ${result.url} — HEALTHY`, `Image ID: ${result.image_id}`, 'Phát hành hoàn tất. Cả ba môi trường dùng cùng một Docker Image.']); productionLink.hidden = false; showToast('Đã triển khai Production thành công.'); }
-    catch (error) { productionButton.disabled = false; showToast(error.message, true); releaseOutput([`Không triển khai được Production: ${error.message}`], true); }
+    try {
+      const data = await api('/api/lab/deploy/production', {
+        method:'POST', body:'{}'
+      });
+      releaseOutput([
+        `PRODUCTION ĐÃ NÂNG CẤP: ${data.version}`, `URL: ${data.url}`,
+        `Image ID: ${data.image_id}`, 'Mở lại Production để xem bảng phân tích mới.',
+        'DEV, STAGING và PRODUCTION giờ dùng chung image v1.1.0.'
+      ]);
+      showToast('Production đã chuyển từ v1.0.0 lên v1.1.0.');
+    } catch (error) {
+      releaseOutput([`Không triển khai được Production: ${error.message}`], true);
+      showToast(error.message, true);
+    }
+    await refreshReleaseState();
   });
+  refreshReleaseState();
 }

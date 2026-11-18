@@ -28,6 +28,9 @@ from flask import Flask, current_app, g, jsonify, render_template, request
 BASE_DIR = Path(__file__).resolve().parent
 REPOSITORY_DEFAULT = "dat1806-boop/cicd-devsecops-demo"
 IMAGE_NAME = "cicd-lab:demo"
+BASELINE_IMAGE = "cicd-lab:v1.0.0"
+UPGRADE_IMAGE = "cicd-lab:v1.1.0"
+UPGRADE_VERSION = "v1.1.0"
 ENVIRONMENTS = {
     "dev": {"port": 5101, "container": "cicd-lab-dev"},
     "staging": {"port": 5102, "container": "cicd-lab-staging"},
@@ -56,6 +59,7 @@ DEMO_STATE = {
     },
     "production_approved": False,
     "release": None,
+    "baseline": {"status": "not_deployed"},
     "last_updated": None,
 }
 
@@ -143,6 +147,7 @@ def get_version_info() -> dict[str, str]:
     return {
         "environment": get_environment(),
         "version": os.getenv("APP_VERSION", "1.0.0-demo"),
+        "features": os.getenv("WORKBOARD_FEATURE_SET", "basic"),
         "commit": os.getenv("GIT_COMMIT", "local-build"),
     }
 
@@ -363,6 +368,100 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         with STATE_LOCK:
             return jsonify(DEMO_STATE)
 
+    @app.get("/api/lab/evidence")
+    def lab_evidence():
+        """Inspect the real Docker images and running containers (read-only)."""
+        if not local_controls_allowed():
+            return jsonify(error="Chỉ kiểm tra Docker ở chế độ LOCAL."), 403
+        available, docker = docker_available()
+        if not available:
+            return jsonify(error=docker), 503
+
+        images = {}
+        for tag in (IMAGE_NAME, BASELINE_IMAGE, UPGRADE_IMAGE):
+            result = run_command(
+                [docker, "image", "inspect", tag, "--format", "{{.Id}}"],
+                timeout=15,
+            )
+            images[tag] = {
+                "exists": bool(result["success"]),
+                "image_id": str(result["output"]).strip() if result["success"] else None,
+            }
+
+        environments = {}
+        for name, spec in ENVIRONMENTS.items():
+            container = str(spec["container"])
+            port = int(spec["port"])
+            # Ask Docker for a short, structured result. Full inspect output
+            # could be truncated by run_command(), breaking JSON parsing.
+            summary_format = (
+                '{"running":{{.State.Running}},"image":"{{.Image}}",'
+                '"env":{{json .Config.Env}}}'
+            )
+            inspect = run_command(
+                [docker, "container", "inspect", container,
+                 "--format", summary_format], timeout=15
+            )
+            item = {
+                "container": container,
+                "url": f"http://127.0.0.1:{port}",
+                "exists": bool(inspect["success"]),
+                "running": False,
+                "healthy": False,
+                "image_id": None,
+                "version": None,
+                "features": None,
+                "app_env": None,
+                "tasks": None,
+                "health_result": "Chưa có container đang chạy.",
+            }
+            if inspect["success"]:
+                try:
+                    info = json.loads(str(inspect["output"]))
+                    item["running"] = bool(info.get("running"))
+                    item["image_id"] = info.get("image")
+                    settings = info.get("env") or []
+                    exposed = {"APP_ENV", "APP_VERSION", "WORKBOARD_FEATURE_SET"}
+                    # Never expose unrelated container environment variables or secrets.
+                    safe_env = dict(
+                        part.split("=", 1) for part in settings
+                        if "=" in part and part.split("=", 1)[0] in exposed
+                    )
+                    item["app_env"] = safe_env.get("APP_ENV")
+                    item["version"] = safe_env.get("APP_VERSION")
+                    item["features"] = safe_env.get("WORKBOARD_FEATURE_SET")
+                except (ValueError, TypeError, IndexError, KeyError):
+                    item["health_result"] = "Không đọc được thông tin container."
+            if item["running"]:
+                # These URLs use only fixed, server-defined ports on loopback.
+                try:
+                    with urlopen(f"{item['url']}/health", timeout=2) as response:  # nosec B310
+                        data = json.loads(response.read().decode("utf-8"))
+                        item["healthy"] = response.status == 200 and data.get("status") == "ok"
+                    item["health_result"] = (
+                        "HTTP 200 /health" if item["healthy"]
+                        else "Ứng dụng phản hồi không đạt yêu cầu."
+                    )
+                    if item["healthy"]:
+                        info_url = f"{item['url']}/api/info"
+                        with urlopen(info_url, timeout=2) as response:  # nosec B310
+                            public = json.loads(response.read().decode("utf-8"))
+                        item["version"] = public.get("version", item["version"])
+                        item["features"] = public.get("features", item["features"])
+                        item["app_env"] = public.get("environment", item["app_env"])
+                        tasks_url = f"{item['url']}/api/tasks"
+                        with urlopen(tasks_url, timeout=2) as response:  # nosec B310
+                            task_data = json.loads(response.read().decode("utf-8"))
+                        item["tasks"] = len(task_data.get("tasks", []))
+                except (OSError, ValueError, HTTPError, KeyError):
+                    item["healthy"] = False
+                    item["health_result"] = "Không lấy được /health hoặc /api/info."
+            environments[name] = item
+        return jsonify(
+            source="Docker CLI và HTTP trên 127.0.0.1; không dùng trạng thái giả lập",
+            checked_at=utc_now(), images=images, environments=environments,
+        )
+
     @app.post("/api/lab/tests")
     def run_tests():
         if not local_controls_allowed():
@@ -400,11 +499,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             DEMO_STATE["image"] = None
             DEMO_STATE["production_approved"] = False
             DEMO_STATE["release"] = None
-            for name in ENVIRONMENTS:
+            for name in ("dev", "staging"):
                 DEMO_STATE["environments"][name] = {
-                    "status": "not_deployed",
-                    "url": None,
-                    "image_id": None,
+                    "status": "not_deployed", "url": None, "image_id": None,
                 }
             DEMO_STATE["last_updated"] = utc_now()
         return jsonify(success=success, tests=commands, state=DEMO_STATE), (200 if success else 422)
@@ -447,22 +544,120 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             }
             DEMO_STATE["image"] = {"tag": IMAGE_NAME, "id": image_id} if success else None
             DEMO_STATE["production_approved"] = False
-            for name in ENVIRONMENTS:
+            for name in ("dev", "staging"):
                 DEMO_STATE["environments"][name] = {
-                    "status": "not_deployed",
-                    "url": None,
-                    "image_id": None,
+                    "status": "not_deployed", "url": None, "image_id": None,
                 }
             DEMO_STATE["last_updated"] = utc_now()
         return jsonify(success=success, build=build, image=DEMO_STATE["image"]), (
             200 if success else 422
         )
 
+    def start_container(
+        name: str,
+        docker: str,
+        image_tag: str,
+        image_id: str,
+        app_version: str,
+        feature_set: str,
+    ) -> tuple[dict[str, object], int]:
+        """Start a preset container and verify its actual /health response."""
+        spec = ENVIRONMENTS[name]
+        container_name = spec["container"]
+        port = spec["port"]
+        # Keep a stoppable rollback copy of the previous container until
+        # the replacement has passed its health check. Production is therefore
+        # not permanently lost when a newly built image fails to start.
+        rollback_name = f"{container_name}-rollback"
+        existing = run_command(
+            [docker, "container", "inspect", container_name, "--format", "{{.Id}}"],
+            timeout=20,
+        )
+        had_previous = bool(existing["success"])
+        if had_previous:
+            run_command([docker, "rm", "-f", rollback_name], timeout=20)
+            rename = run_command(
+                [docker, "rename", container_name, rollback_name], timeout=20
+            )
+            if not rename["success"]:
+                return {"error": "Không lưu được container cũ.", "details": rename}, 422
+            stop = run_command([docker, "stop", rollback_name], timeout=30)
+            if not stop["success"]:
+                run_command([docker, "rename", rollback_name, container_name], timeout=20)
+                return {"error": "Không dừng được container cũ.", "details": stop}, 422
+
+        def restore_previous() -> None:
+            run_command([docker, "rm", "-f", container_name], timeout=20)
+            if had_previous:
+                run_command([docker, "rename", rollback_name, container_name], timeout=20)
+                run_command([docker, "start", container_name], timeout=30)
+
+        launch = run_command(
+            [
+                docker,
+                "run", "-d", "--name", container_name,
+                "-p", f"127.0.0.1:{port}:5000",
+                "-v", f"cicd-lab-{name}-data:/app/instance",
+                "-e", f"APP_ENV={name}",
+                "-e", f"APP_VERSION={app_version}",
+                "-e", f"GIT_COMMIT={os.getenv('GIT_COMMIT', 'local-demo')}",
+                image_tag,
+            ],
+            timeout=60,
+        )
+        if not launch["success"]:
+            restore_previous()
+            return {
+                "error": "Không khởi chạy được container mới; đã thử khôi phục bản cũ.",
+                "details": launch,
+            }, 422
+        url = f"http://127.0.0.1:{port}"
+        healthy = False
+        health_error = "Hết thời gian chờ health check."
+        for _attempt in range(20):
+            try:
+                with urlopen(f"{url}/health", timeout=2) as response:  # nosec B310
+                    payload = json.loads(response.read().decode("utf-8"))
+                    if response.status == 200 and payload.get("status") == "ok":
+                        healthy = True
+                        break
+                    health_error = "Health endpoint trả về trạng thái không hợp lệ."
+            except (OSError, ValueError, HTTPError):
+                health_error = "Chưa thể kết nối health endpoint của container."
+            time.sleep(1)
+        if not healthy:
+            logs = run_command([docker, "logs", container_name], timeout=20)
+            restore_previous()
+            return {
+                "error": "Container không đạt health check; đã thử khôi phục bản cũ.",
+                "details": launch,
+                "health_error": health_error,
+                "container_logs": logs.get("output", "Không lấy được log."),
+            }, 422
+        if had_previous:
+            # Remove the backup only after the replacement has become healthy.
+            run_command([docker, "rm", "-f", rollback_name], timeout=20)
+        with STATE_LOCK:
+            DEMO_STATE["environments"][name] = {
+                "status": "success", "url": url, "image_id": image_id,
+                "container": container_name, "port": port,
+                "version": app_version, "image_tag": image_tag,
+                "features": feature_set, "updated_at": utc_now(),
+            }
+            DEMO_STATE["last_updated"] = utc_now()
+        return {
+            "success": True, "environment": name, "url": url,
+            "image_id": image_id, "version": app_version,
+            "features": feature_set,
+            "message": f"Container {name.upper()} đã chạy và health check đạt.",
+        }, 200
+
     def deploy_environment(name: str) -> tuple[dict[str, object], int]:
         if not local_controls_allowed():
             return {"error": "Thao tác chỉ được phép ở chế độ LOCAL."}, 403
         with STATE_LOCK:
-            if not DEMO_STATE["image"]:
+            image = DEMO_STATE["image"]
+            if not image:
                 return {"error": "Hãy build Docker image thành công trước."}, 409
             if name == "staging" and DEMO_STATE["environments"]["dev"]["status"] != "success":
                 return {"error": "Hãy triển khai DEV thành công trước STAGING."}, 409
@@ -471,84 +666,72 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     return {"error": "Hãy triển khai STAGING thành công trước."}, 409
                 if not DEMO_STATE["production_approved"]:
                     return {"error": "Production đang chờ bạn phê duyệt."}, 409
+                release_state = (DEMO_STATE.get("release") or {}).get("status")
+                if release_state and release_state != "approved":
+                    return {"error": "Phiên bản chưa được phê duyệt hoặc đã phát hành."}, 409
+            image_tag = str(image["tag"])
+            image_id = str(image["id"])
+            release = DEMO_STATE.get("release") or {}
+            new_version = release.get("version") == UPGRADE_VERSION
+            app_version = UPGRADE_VERSION if new_version else "v1.0.0"
+            feature_set = "insights" if new_version else "basic"
         available, docker = docker_available()
         if not available:
             return {"error": docker}, 503
-        spec = ENVIRONMENTS[name]
-        container_name = spec["container"]
-        port = spec["port"]
-        run_command([docker, "rm", "-f", container_name], timeout=20)
-        launch = run_command(
-            [
-                docker,
-                "run",
-                "-d",
-                "--name",
-                container_name,
-                "-p",
-                f"{port}:5000",
-                "-e",
-                f"APP_ENV={name}",
-                "-e",
-                f"APP_VERSION={DEMO_STATE.get('release', {}).get('version', '1.0.0-demo')}",
-                "-e",
-                f"GIT_COMMIT={os.getenv('GIT_COMMIT', 'local-demo')}",
-                str(DEMO_STATE["image"].get("tag", IMAGE_NAME)),
-            ],
-            timeout=60,
+        return start_container(
+            name, docker, image_tag, image_id, app_version, feature_set
         )
-        if not launch["success"]:
-            return {"error": "Không khởi chạy được container.", "details": launch}, 422
-        url = f"http://127.0.0.1:{port}"
-        healthy = False
-        health_error = "Hết thời gian chờ health check."
-        for _attempt in range(20):
-            try:
-                health_url = f"{url}/health"
-                with urlopen(health_url, timeout=2) as response:  # nosec B310
-                    payload = json.loads(response.read().decode("utf-8"))
-                    if response.status == 200 and payload.get("status") == "ok":
-                        healthy = True
-                        break
-                    health_error = (
-                        "Health endpoint trả về trạng thái không hợp lệ: "
-                        f"{payload}"
-                    )
-            except (OSError, ValueError, HTTPError):
-                current_app.logger.exception("Health check của container thất bại.")
-                health_error = "Không thể kiểm tra trạng thái container."
-            time.sleep(1)
-        if not healthy:
-            logs = run_command([docker, "logs", container_name], timeout=20)
-            cleanup = run_command([docker, "rm", "-f", container_name], timeout=20)
-            return {
-                "error": (
-                    "Container đã chạy nhưng health check chưa đạt; "
-                    "đã thu log và dọn container lỗi."
-                ),
-                "details": launch,
-                "health_error": health_error,
-                "container_logs": logs.get("output", "Không lấy được log."),
-                "cleanup": cleanup,
-            }, 422
-        image_id = str(DEMO_STATE["image"]["id"])
+
+    @app.post("/api/lab/baseline")
+    def prepare_baseline():
+        """Run the real, basic v1.0.0 Production for before/after comparison."""
+        if not local_controls_allowed():
+            return jsonify(error="Thao tác chỉ được phép ở chế độ LOCAL."), 403
+        if not request.is_json:
+            return jsonify(error="Yêu cầu JSON không hợp lệ."), 415
         with STATE_LOCK:
-            DEMO_STATE["environments"][name] = {
-                "status": "success",
-                "url": url,
-                "image_id": image_id,
-                "container": container_name,
-                "port": port,
-                "updated_at": utc_now(),
+            if (DEMO_STATE.get("release") or {}).get("status") == "running":
+                return jsonify(error="Đang phát hành phiên bản mới."), 409
+        available, docker = docker_available()
+        if not available:
+            return jsonify(error=docker), 503
+        build = run_command(
+            [docker, "build", "--build-arg", "WORKBOARD_FEATURE_SET=basic",
+             "-t", BASELINE_IMAGE, "."], timeout=600
+        )
+        if not build["success"]:
+            return jsonify(error="Build bản v1.0.0 thất bại.", build=build), 422
+        inspected = run_command(
+            [docker, "image", "inspect", BASELINE_IMAGE, "--format", "{{.Id}}"],
+            timeout=30,
+        )
+        if not inspected["success"]:
+            return jsonify(error="Không kiểm tra được image v1.0.0."), 422
+        image_id = str(inspected["output"]).strip().splitlines()[-1]
+        result, status_code = start_container(
+            "production", docker, BASELINE_IMAGE, image_id, "v1.0.0", "basic"
+        )
+        if status_code != 200:
+            return jsonify(result), status_code
+        # Start a new comparison, leaving only the basic Production running.
+        for env_name in ("dev", "staging"):
+            run_command([docker, "rm", "-f", ENVIRONMENTS[env_name]["container"]],
+                        timeout=20)
+        with STATE_LOCK:
+            DEMO_STATE["baseline"] = {
+                "status": "success", "version": "v1.0.0",
+                "image_tag": BASELINE_IMAGE, "image_id": image_id,
+                "url": result["url"], "updated_at": utc_now(),
             }
-            DEMO_STATE["last_updated"] = utc_now()
-        return {
-            "success": True,
-            "environment": name,
-            "url": url,
-            "image_id": image_id,
-            "message": f"Container {name.upper()} đã chạy và health check đạt.",
-        }, 200
+            DEMO_STATE["release"] = None
+            DEMO_STATE["image"] = None
+            DEMO_STATE["production_approved"] = False
+            for env_name in ("dev", "staging"):
+                DEMO_STATE["environments"][env_name] = {
+                    "status": "not_deployed", "url": None, "image_id": None
+                }
+        return jsonify(success=True, baseline=DEMO_STATE["baseline"],
+                       production=result)
 
     @app.post("/api/lab/release/start")
     def start_release():
@@ -571,11 +754,24 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         if not description or len(description) > 240:
             return jsonify(error="Hãy nhập mô tả thay đổi (tối đa 240 ký tự)."), 400
         version = version if version.startswith("v") else f"v{version}"
-        # Use a fixed image tag for Docker commands. The user-supplied version
-        # remains release metadata and never reaches subprocess arguments.
-        image_tag = IMAGE_NAME
+        if version != UPGRADE_VERSION:
+            return jsonify(
+                error="Bản nâng cấp chuẩn bị cho demo là v1.1.0. "
+                "Các phiên bản khác cần được lập trình và kiểm thử riêng."
+            ), 400
+        # Fixed preset, not a user-controlled shell command or code generator.
+        image_tag = UPGRADE_IMAGE
         with STATE_LOCK:
-            if (DEMO_STATE.get("release") or {}).get("status") == "running":
+            baseline_is_ready = DEMO_STATE.get("baseline", {}).get("status") == "success"
+            old_production = DEMO_STATE["environments"]["production"].get("version")
+            if not baseline_is_ready or old_production != "v1.0.0":
+                return jsonify(
+                    error="Hãy nhấn 'Chuẩn bị website cũ' để chạy "
+                    "PRODUCTION v1.0.0 trước khi phát hành."
+                ), 409
+            if (DEMO_STATE.get("release") or {}).get("status") in (
+                "running", "awaiting_approval", "approved"
+            ):
                 return jsonify(error="Đang có phiên phát hành chạy."), 409
             DEMO_STATE["release"] = {
                 "version": version, "description": description,
@@ -619,7 +815,10 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 DEMO_STATE["release"].update(status="failed", message=docker)
             return jsonify(success=False, error=docker, tests=commands), 503
 
-        build = run_command([docker, "build", "-t", image_tag, "."], timeout=600)
+        build = run_command(
+            [docker, "build", "--build-arg", "WORKBOARD_FEATURE_SET=insights",
+             "-t", image_tag, "."], timeout=600
+        )
         inspect = (
             run_command(
                 [docker, "image", "inspect", image_tag, "--format", "{{.Id}}"],
@@ -652,7 +851,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 "command": build,
                 "updated_at": utc_now(),
             }
-            for env_name, spec in ENVIRONMENTS.items():
+            # Keep the old Production untouched until the approval gate.
+            for env_name in ("dev", "staging"):
+                spec = ENVIRONMENTS[env_name]
                 run_command([docker, "rm", "-f", spec["container"]], timeout=20)
                 DEMO_STATE["environments"][env_name] = {
                     "status": "not_deployed", "url": None, "image_id": None
@@ -718,18 +919,24 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         if available:
             for spec in ENVIRONMENTS.values():
                 run_command([docker, "rm", "-f", spec["container"]], timeout=20)
+            # Intentionally keep the per-environment Docker volumes: restarting
+            # the demo must never silently erase saved WorkBoard tasks.
         with STATE_LOCK:
             DEMO_STATE["tests"] = {"status": "not_run", "message": "Chưa chạy kiểm thử."}
             DEMO_STATE["build"] = {"status": "not_run", "message": "Chưa build Docker image."}
             DEMO_STATE["image"] = None
             DEMO_STATE["production_approved"] = False
             DEMO_STATE["release"] = None
+            DEMO_STATE["baseline"] = {"status": "not_deployed"}
             for name in ENVIRONMENTS:
                 DEMO_STATE["environments"][name] = {
                     "status": "not_deployed", "url": None, "image_id": None
                 }
             DEMO_STATE["last_updated"] = utc_now()
-        return jsonify(success=True, message="Đã đặt lại trạng thái phòng CI/CD.")
+        return jsonify(
+            success=True,
+            message="Đã dừng container; dữ liệu công việc trong Docker volumes được giữ lại."
+        )
 
     @app.post("/api/lab/approve-production")
     def approve_production():
@@ -740,6 +947,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 return jsonify(
                     error="Chỉ có thể phê duyệt sau khi STAGING thành công."
                 ), 409
+            release = DEMO_STATE.get("release") or {}
+            if release and release.get("status") != "awaiting_approval":
+                return jsonify(error="Phiên bản mới chưa sẵn sàng phê duyệt."), 409
             DEMO_STATE["production_approved"] = True
             if DEMO_STATE.get("release"):
                 DEMO_STATE["release"].update(status="approved", approved_at=utc_now())

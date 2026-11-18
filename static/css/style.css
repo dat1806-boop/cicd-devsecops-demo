@@ -10,3 +10,172 @@
 .release-launcher{margin:0 0 28px;padding:22px;background:linear-gradient(145deg,rgba(19,39,65,.98),rgba(13,27,45,.98));border-color:#355779}.release-launch-head{display:flex;justify-content:space-between;align-items:center;gap:18px}.release-launch-head h2{font:700 22px 'Space Grotesk';margin:0 0 5px}.release-launch-head p{font-size:11px;color:var(--muted);margin:0}.release-mark{font:800 13px 'Space Grotesk';letter-spacing:1px;color:#8bc7ff;border:1px solid #355779;background:#152d49;padding:10px 13px;border-radius:11px;white-space:nowrap}.release-form{display:grid;grid-template-columns:150px 1fr auto;align-items:end;gap:12px;margin-top:18px}.release-form label{display:block;font-size:10px;font-weight:700;color:#a8bdd4;margin-bottom:6px}.release-form input{width:100%;background:#0b1728;border:1px solid #2a405d;border-radius:9px;color:var(--text);padding:11px;font-size:12px}.release-form input:focus{outline:none;border-color:var(--blue)}.release-result{white-space:pre-wrap;overflow-wrap:anywhere;background:#091321;border:1px solid #203550;color:#a8bfd9;border-radius:10px;padding:12px;margin-top:14px;font:10px/1.7 Consolas,monospace;min-height:48px}.release-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.release-footnote{font-size:9px;color:#8399b4;margin:12px 0 0}.release-result .success-line{color:var(--green)}.release-result .error-line{color:var(--red)}
 @media(max-width:850px){.release-form{grid-template-columns:1fr 1fr}.release-form button{grid-column:1/-1}.release-description{grid-column:2}}
 @media(max-width:560px){.release-launch-head{align-items:flex-start}.release-mark{font-size:10px}.release-form{grid-template-columns:1fr}.release-description,.release-form button{grid-column:auto}.release-actions .button{width:100%}}
+
+/* Real before/after local release demonstration */
+.edition-tag{display:inline-flex;margin:17px 0 1px;padding:8px 13px;border:1px solid #375471;border-radius:999px;color:#c2d6f0;background:#122541;font-weight:800;font-size:11px;letter-spacing:.65px}
+.edition-tag.edition-new{color:#5fe0c5;border-color:#257868;background:#10362f}
+.env-version{color:#a9c4e1;opacity:.85;margin-left:7px;font-size:10px;font-weight:700}
+.edition-demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.edition-demo-card{border:1px solid #30445f;border-radius:13px;background:#0d1c31;padding:17px}
+.edition-demo-card h3{margin:7px 0 7px;font-size:20px;color:#f2f7ff}
+.edition-demo-card p{color:#a5bdd8;font-size:12px;line-height:1.75;margin:0 0 13px}
+.edition-step{font-size:11px;color:#91b5e5;font-weight:800;letter-spacing:.9px}
+.edition-demo-new{border-color:#23766e;background:#102c32}
+.prepared-label{display:block;margin-top:9px;color:#6bdbc5;font-size:11px}
+.edition-compare{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:13px}
+.edition-compare>div{background:#0b182a;border:1px solid #324760;border-radius:11px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.edition-compare small{color:#9db9db;font-size:11px}
+.edition-compare strong{color:#f3f7ff;font-size:14px}
+.edition-compare a{font-size:12px;color:#7fc0ff;text-decoration:none}
+.insights-panel{margin-top:30px;border:1px solid #296d68}
+.insights-heading{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.insights-heading h2{font-size:26px;margin:7px 0}.insights-heading p{color:#aac1d7;font-size:13px;margin:0}
+.feature-new-pill{font-size:11px;font-weight:800;white-space:nowrap;color:#54ddbd;background:#0e4136;padding:9px 12px;border:1px solid #247563;border-radius:999px}
+.insights-grid{display:grid;grid-template-columns:1fr 2fr;gap:17px;margin-top:21px}
+.insight-kpi,.insight-priorities{padding:20px;background:#0b1c2d;border:1px solid #233d58;border-radius:13px}
+.insight-kpi small{font-size:13px;color:#a2b9d2}.insight-kpi strong{display:block;font-size:54px;margin:15px 0 2px;color:#4bd3b2}.insight-kpi p{font-size:12px;color:#8daac7}
+.insight-priorities h3{margin:0 0 18px;font-size:16px}
+.priority-chart-row{display:grid;grid-template-columns:86px 1fr 30px;gap:13px;align-items:center;margin:15px 0;font-size:12px;color:#b6c9dd}
+.priority-chart-row>div{height:12px;background:#192c45;border-radius:99px;overflow:hidden}
+.priority-chart-row i{height:100%;width:0;display:block;border-radius:99px;background:#398de6;transition:width .3s}
+.priority-chart-row:nth-child(2) i{background:#eb8d71}
+.priority-chart-row:nth-child(4) i{background:#54c8aa}
+.priority-chart-row b{font-size:13px;color:#fff}
+@media(max-width:800px){.edition-demo-grid,.insights-grid{grid-template-columns:1fr}.edition-compare{grid-template-columns:1fr}.insights-heading{align-items:start;flex-direction:column}}
+
+/* Evidence-first classroom presentation. */
+.teaching-bridge,.evidence-board,.workboard-role{margin:20px 0;border-color:#355477}
+.teaching-bridge h2,.evidence-board h2,.workboard-role h2{font-size:22px;margin:7px 0 8px}
+.teaching-bridge p,.evidence-board p,.workboard-role p{color:#a9c2e0;font-size:12px;line-height:1.8}
+.teaching-bridge code{color:#9ac8ff;background:#142943;padding:2px 5px;border-radius:5px}
+.bridge-steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 0}
+.bridge-steps>div{flex:1;min-width:155px;padding:14px 12px;border:1px solid #345475;background:#0b1b30;border-radius:11px}
+.bridge-steps>div>b{color:#65a8ff;display:block;font-size:12px;margin-bottom:6px}
+.bridge-steps strong,.bridge-steps small{display:block}.bridge-steps strong{font-size:12px}.bridge-steps small{font-size:10px;color:#95b4d5;margin-top:4px}
+.bridge-steps>span{color:#63bde8;font-size:20px}.bridge-actions{display:flex;gap:12px;flex-wrap:wrap}
+.teaching-note{margin:14px 0 0!important;color:#82b4de!important}
+.evidence-top{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.evidence-top p{margin:0 0 10px}.evidence-metrics,.evidence-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.evidence-metrics>div,.evidence-columns>div{background:#0b1b30;border:1px solid #304d70;padding:16px;border-radius:11px;min-width:0}
+.evidence-metrics span,.evidence-metrics strong,.evidence-metrics small{display:block}
+.evidence-metrics span{font-size:10px;color:#94bce9;font-weight:700}
+.evidence-metrics strong{font-size:20px;line-height:1.5;color:#eff5ff;overflow-wrap:anywhere;margin:4px 0}
+.evidence-metrics small{font-size:10px;color:#91afce;overflow-wrap:anywhere}
+.evidence-talking-point{padding:14px 16px;border-left:4px solid #45c4b5;border-radius:8px;background:rgba(47,144,147,.13);margin-top:16px;font-size:13px;line-height:1.65;color:#c6f2eb}
+.evidence-columns>div>b{display:block;font-size:13px;color:#d7ebff}
+.evidence-columns p{font-size:11px;line-height:1.7;margin:8px 0 0;white-space:pre-line;overflow-wrap:anywhere}
+.evidence-columns .evidence-success{color:#67dfab}.evidence-columns .evidence-error{color:#ff9c9c}
+.evidence-columns .evidence-link{display:inline-block;margin-top:8px;color:#88c8ff;font-size:11px;font-weight:700}
+.evidence-details{margin-top:15px;border:1px solid #304d70;background:#0b1b30;padding:12px;border-radius:10px}
+.evidence-details summary{cursor:pointer;color:#cfe9ff;font-size:12px;font-weight:700}.proof-images{padding-top:10px;font:11px/1.9 Consolas,monospace;color:#b2d2ec;white-space:pre-wrap;overflow-wrap:anywhere}
+.evidence-feedback{color:#8ca9c9;font-size:11px;margin-top:11px}
+.workboard-role{margin-top:25px}.workboard-role a{margin-right:10px;margin-top:10px}
+@media(max-width:870px){.evidence-metrics,.evidence-columns{grid-template-columns:1fr}.bridge-steps>span{display:none}}
+
+/* ================================================================
+   CLEAN PRESENTATION UI — keeps all existing API and JS identifiers.
+   The application, pipeline, and optional advanced examples are
+   separated visually to make a classroom demonstration easier.
+   ================================================================ */
+:root{--bg:#091321;--surface:#101f32;--surface2:#14263b;--surface3:#1b3049;--border:#2b405b;--muted:#a6b9ce;--text:#eef5ff;--shadow:none}
+body{background:#0a1524;color:var(--text);font-size:14px;line-height:1.6}
+body::before{content:none}
+.page-shell{max-width:1240px;padding:0 28px 44px}
+.topbar{height:70px;background:#0b1727;border-bottom:1px solid #23344c;backdrop-filter:none}
+.nav-wrap{max-width:1240px}.topbar nav a{font-size:13px}.topbar nav a.active{background:#233e5e}
+.page-kicker{display:block;color:#82b2ee;font-weight:800;letter-spacing:1.2px;font-size:10px;margin-bottom:9px}
+.simple-hero{padding:34px 0 25px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid #2a3d55;margin-bottom:18px}
+.simple-hero h1{font:700 clamp(29px,3.4vw,41px)/1.18 'Be Vietnam Pro',sans-serif;letter-spacing:-.7px;margin:0 0 10px}
+.simple-hero p{max-width:735px;color:#a8bed7;margin:0;line-height:1.75;font-size:13px}
+.simple-hero .version-chip{font-size:12px;letter-spacing:0;font-weight:700;color:#9dd7ff;vertical-align:middle;background:#153456;border:1px solid #34628e;border-radius:9px;padding:6px 10px;white-space:nowrap}
+.intro-actions{display:flex;flex-direction:column;gap:10px;align-items:stretch;flex-shrink:0;min-width:218px}
+.intro-actions .button{min-width:185px;white-space:nowrap}
+.runtime-identity{border:1px solid var(--border);background:#12263e;padding:10px 14px;border-radius:10px;color:#b5cbe2;font-size:12px;text-align:center}
+.relation-note{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:13px 17px;border-radius:12px;background:#13273c;border:1px solid #2d4968;margin:0 0 30px;font-size:12px;color:#bcd0e5}
+.relation-note strong{color:#f0f6ff}.relation-note a{color:#91c9ff;font-weight:800;white-space:nowrap}
+.simple-section{margin:30px 0 42px;scroll-margin-top:100px}
+.simple-section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:17px}
+.simple-section-head h2{font:700 clamp(20px,2.5vw,27px)/1.28 'Be Vietnam Pro',sans-serif;letter-spacing:-.4px;margin:0 0 6px}
+.simple-section-head p{font-size:12px;color:#a5b9cf;line-height:1.65;margin:0;max-width:850px}
+.subtle-tag{padding:7px 10px;border:1px solid #34516f;border-radius:8px;background:#152940;color:#8dc4ff;font-size:10px;font-weight:800;white-space:nowrap}
+.panel{border-radius:13px;background:#112239;border-color:#2a415e;box-shadow:none;padding:20px}
+.button{font-size:12px;min-height:39px;border-radius:9px}
+.button-primary{background:#327bda;border-color:#4587da;box-shadow:none}.button-primary:hover:not(:disabled){background:#428eea}
+.button-ghost{background:#172d45;color:#d0e0f2;border:1px solid #365471}
+.button-amber{background:#60471d;color:#ffe3aa;border:1px solid #906a2b}
+.button:disabled{opacity:.43}
+.compact-workspace{grid-template-columns:minmax(0,1.45fr) minmax(290px,.8fr);gap:16px}
+.task-panel,.create-panel{min-width:0}.task-stats{margin:15px 0}.task-stats>div{padding:13px 15px}.task-item{border:1px solid #28405b;background:#152941;border-radius:10px}.task-list{max-height:480px;overflow:auto}
+.create-panel form label{margin-top:13px}.create-panel .hint-box{display:none}
+.clean-release{padding:22px}
+.release-wizard-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:15px;margin-bottom:18px}
+.release-wizard-step{border:1px solid #334e69;background:#0e1d31;border-radius:11px;padding:17px;min-width:0}
+.wizard-step-heading{display:flex;align-items:start;gap:10px;margin-bottom:16px}
+.wizard-number{display:inline-grid;place-items:center;border-radius:10px;background:#22446e;color:#b7d9ff;font:800 13px 'Be Vietnam Pro';height:32px;width:32px;flex:none}
+.wizard-step-heading h3{font:700 15px 'Be Vietnam Pro';margin:0 0 3px;color:#ecf4ff}
+.wizard-step-heading h3 small{font-size:10px;font-weight:500;color:#8baed0}
+.wizard-step-heading p{margin:0;color:#9cb3ce;font-size:11px}
+.release-wizard-step .env-link{margin:0 0 0 8px}
+.clean-release-form{display:grid;grid-template-columns:100px minmax(180px,1fr);gap:9px;align-items:end;margin:0}
+.clean-release-form>div{min-width:0}.clean-release-form input{width:100%;min-width:0}
+.clean-release-form>.button{grid-column:1/-1;justify-self:start}
+.release-status-label{color:#c1d8f0;font-weight:800;font-size:11px;margin:12px 0 7px}
+.clean-release .release-result{margin-top:0;max-height:170px;overflow:auto;line-height:1.7}
+.clean-release .edition-compare{margin-top:14px}.clean-release .edition-compare>div{background:#0d1c2f;border:1px solid #2d4662}
+.clean-release .edition-compare strong{font-size:13px}
+.clean-release .release-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid #2f4460}
+.clean-release .release-footnote{font-size:10px;color:#8daac5;line-height:1.7;margin:14px 0 0}
+.insights-panel{border-color:#2f796a}
+.lab-simple-hero{margin-bottom:15px}
+.lab-section{margin-top:25px}
+.clean-lab-grid{display:grid;grid-template-columns:minmax(0,1.44fr) minmax(295px,.85fr);gap:18px;align-items:start}
+.clean-lab-grid .pipeline-track{gap:11px}
+.clean-lab-grid .pipeline-track:before{left:17px;top:25px;bottom:30px;background:#456886;opacity:.45}
+.clean-lab-grid .pipeline-step{grid-template-columns:36px minmax(0,1fr);gap:10px}
+.clean-lab-grid .step-index{width:36px;height:36px;border:1px solid #3a597a;background:#162f4c;border-radius:10px}
+.clean-lab-grid .step-content{padding:17px;background:#112238;border:1px solid #2c435e;border-radius:11px}
+.clean-lab-grid .step-content p{font-size:11px;color:#a9bed6;line-height:1.6;margin:7px 0 12px}
+.clean-lab-grid .step-top{align-items:center;gap:12px}
+.clean-lab-grid .step-top h3{font:700 15px 'Be Vietnam Pro',sans-serif;letter-spacing:0;margin:0}
+.clean-lab-grid .step-kicker{font-size:9px;letter-spacing:.8px;color:#82a6cd}
+.clean-lab-grid .step-state{font-size:9px;letter-spacing:.2px;white-space:nowrap}
+.clean-lab-grid .step-controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.clean-lab-grid .step-controls .env-link{margin:0;font-size:11px}
+.clean-lab-grid .step-content>.button{font-size:12px}
+.log-details{border-top:1px solid #28425c;margin-top:13px;padding-top:9px}
+.log-details summary{cursor:pointer;color:#8ebde9;font-size:11px;font-weight:700;user-select:none;list-style-position:inside}
+.log-details summary::marker{color:#7ea4c8}
+.log-details[open] summary{margin-bottom:9px}
+.clean-lab-grid .log-details .step-output{max-height:240px;margin:0;font:11px/1.65 Consolas,monospace;background:#071321;border:1px solid #243c56;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px}
+.clean-lab-grid .pipeline-step.has-error .step-content{border-color:#ae5868}
+.clean-lab-grid .evidence-board{position:sticky;top:88px;margin:0;max-height:calc(100vh - 104px);overflow:auto;padding:20px;border:1px solid #375a78;background:#11263d}
+.clean-lab-grid .evidence-board h2{font:700 19px 'Be Vietnam Pro';margin:0 0 6px}
+.clean-lab-grid .evidence-board p{font-size:11px;line-height:1.6}
+.clean-lab-grid .evidence-metrics{grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.clean-lab-grid .evidence-metrics>div{padding:12px;min-width:0;border-radius:9px;background:#0c1d2f}
+.clean-lab-grid .evidence-metrics>div:last-child{grid-column:1/-1}
+.clean-lab-grid .evidence-metrics strong{font:700 16px/1.4 'Be Vietnam Pro';overflow-wrap:anywhere}
+.clean-lab-grid .evidence-metrics small{font-size:10px}
+.clean-lab-grid .evidence-talking-point{font-size:12px;margin:12px 0;padding:12px 13px}
+.clean-lab-grid #verify-docker{margin:3px 0 10px}
+.simple-proof-environments{display:grid;grid-template-columns:1fr;gap:7px}
+.simple-proof-environments>div{padding:11px 12px;background:#0b1b2d;border:1px solid #2b4765;border-radius:9px}
+.simple-proof-environments>div>b{font-size:12px}.simple-proof-environments>div p{margin:3px 0 0;color:#9cbad6;white-space:pre-line;overflow-wrap:anywhere}
+.simple-proof-environments .evidence-link{display:inline-block;font-weight:700;color:#8fc8ff;font-size:11px;margin-top:6px}
+.clean-lab-grid .evidence-details{padding:9px 11px;margin-top:10px}
+.clean-lab-grid .evidence-feedback{font-size:10px;color:#86a5c6;margin:10px 0 0}
+.legacy-status{display:none!important}
+.advanced-lab{margin-top:36px}
+.extra-panel{padding:0;margin-top:9px;overflow:hidden}
+.extra-panel>summary{cursor:pointer;font-weight:800;font-size:13px;padding:15px 18px;color:#d6e8fa;background:#142942}
+.extra-panel[open]>summary{border-bottom:1px solid #304864}
+.extra-panel>p,.extra-panel>.scenario-grid,.extra-panel>.scenario-result,.extra-panel>.github-controls,.extra-panel>.step-output,.extra-panel>#refresh-github,.extra-panel>.github-runs{margin:13px 18px}
+.extra-panel .scenario-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.extra-panel .scenario-card{text-align:left;min-width:0}
+.extra-panel .github-controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.extra-panel .github-controls select{min-width:200px}
+.footer{border-top:1px solid #243a55;color:#8ba4bf}
+/* [hidden] must override the author display rules for release links */
+[hidden]{display:none!important}
+@media(max-width:1050px){.simple-hero{align-items:start;flex-direction:column}.intro-actions{flex-direction:row;flex-wrap:wrap}.clean-lab-grid{grid-template-columns:1fr}.clean-lab-grid .evidence-board{position:static;max-height:none}.release-wizard-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.page-shell{padding:0 16px 36px}.simple-hero{padding:26px 0 18px}.simple-hero h1{font-size:27px}.simple-section-head{align-items:start;flex-direction:column}.relation-note{align-items:start;flex-direction:column}.compact-workspace{grid-template-columns:1fr}.clean-release{padding:14px}.clean-release-form{grid-template-columns:1fr}.clean-release-form>.button{grid-column:auto}.clean-release .edition-compare{grid-template-columns:1fr}.clean-release .release-actions{align-items:start;gap:8px}.extra-panel .scenario-grid{grid-template-columns:1fr}.intro-actions{flex-direction:column;width:100%}.topbar nav a{padding:8px}.footer{flex-direction:column}}
